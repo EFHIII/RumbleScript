@@ -159,8 +159,15 @@ function drawBoard(val, Turn) {
   return score + '\n' + txt;
 }
 
+let running=0;
+
 async function runMatch(a, b, turns = 100) {
+  while(running>10){
+    await sleep(10000);
+  }
+  running++;
   let val = await runCmd(`rumblebot.exe run term --raw -t=${turns} ${a}.js ${b}.js`);
+  running--;
   try{
     return JSON.parse(val);
   }
@@ -271,7 +278,7 @@ var players = {
 };
 
 for(let i=1;i<=4;i++){
-  for(let j=1;j<=2;j++){
+  for(let j=1;j<=4;j++){
     players['H-'+i+j]=''+i+j;
   }
 }

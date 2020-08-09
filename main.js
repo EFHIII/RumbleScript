@@ -161,7 +161,13 @@ function drawBoard(val, Turn) {
 
 async function runMatch(a, b, turns = 100) {
   let val = await runCmd(`rumblebot.exe run term --raw -t=${turns} ${a}.js ${b}.js`);
-  return JSON.parse(val);
+  try{
+    return JSON.parse(val);
+  }
+  catch(e){
+    console.log(`${a} vs ${b} errored`);
+    throw val;
+  }
 }
 
 function limit1(x) {
@@ -265,7 +271,7 @@ var players = {
 };
 
 for(let i=1;i<=4;i++){
-  for(let j=1;j<=4;j++){
+  for(let j=1;j<=2;j++){
     players['H-'+i+j]=''+i+j;
   }
 }

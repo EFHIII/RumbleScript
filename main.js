@@ -56,7 +56,6 @@ function runCmd(cmd) {
 
     child.stdout.on('data', (data) => {
       output += data;
-      console.log('data:\n' + data);
     });
 
     child.stderr.on('data', (data) => {
@@ -68,7 +67,7 @@ function runCmd(cmd) {
       if(code === 0) {
         resolve(output);
       }
-      reject(red(output));
+      reject(red('\n\n'+cmd+'\n\n'+output));
     });
   });
 }
@@ -174,11 +173,11 @@ function drawBoard(val, Turn) {
 let running = 0;
 
 async function runMatch(a, b, turns = 100) {
-  console.log(`queued ${a} vs ${b}`);
+  //console.log(`queued ${a} vs ${b}`);
   while(running > 10) {
     await sleep(10000);
   }
-  console.log(`starting ${a} vs ${b}`);
+  //console.log(`starting ${a} vs ${b}`);
   running++;
   let val = await runCmd(`rumblebot.exe run term --raw -t=${turns} ${a}.js ${b}.js`);
   running--;
@@ -299,7 +298,7 @@ function roundRobbin(players, bestOf = 1, turns) {
   for(let a in players) {
     for(let b in players) {
       if(a === b) { continue; }
-      matches.push({ playerA: a, playerB: b, val: superMatch(players[a], players[b], bestOf, turns) });
+      matches.push({ playerA: a, playerB: b, val: bestOf<2?runMatch(players[a],players[b],turns):superMatch(players[a], players[b], bestOf, turns) });
     }
   }
 
@@ -337,7 +336,7 @@ const consts = {
   DistTo: [1, 4],
   Prox: [1, 4],
   FleeHealth: [1, 3],
-  CloseVal: [1, 3],
+  CloseVal: [2, 2],
   FriendlyProx: [2, 2],
   HasEnemyD: [3, 3]
 };
@@ -367,15 +366,11 @@ for(let i = 3; i <= 4; i++) {
   }
 }
 
-for(let i = 3; i <= 4; i++) {
-  for(let j = 1; j <= 2; j++) {
-    players['H-' + i + j] = '' + i + j;
-  }
-}
-
 
 async function main() {
-  roundRobbin(players, 5, 100);
+  roundRobbin(players, 1, 100);
+  //roundRobbin(players, 5, 100);
+
   //console.log(await superMatch('om','flail',5))
   //veryVerboseMatch('testc','testb');
   //log(await bestOfX('h1', 'h1', 5, 100, false, true));

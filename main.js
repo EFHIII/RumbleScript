@@ -1,6 +1,9 @@
 const PreviewAfter = 3;
 const MaxName = 6;
 
+const MaxBestOf = 3;
+const MinWinBy = 3;
+
 const { spawn } = require('child_process');
 
 sleep = a => new Promise((r) => { setTimeout(r, a) });
@@ -53,10 +56,19 @@ function runCmd(cmd) {
 
     child.stdout.on('data', (data) => {
       output += data;
+      console.log('data:\n' + data);
     });
 
-    child.on('close', function() {
-      resolve(output);
+    child.stderr.on('data', (data) => {
+      output += data;
+      console.log('data:\n' + data);
+    });
+
+    child.on('close', function(code) {
+      if(code === 0) {
+        resolve(output);
+      }
+      reject(red(output));
     });
   });
 }
@@ -159,19 +171,20 @@ function drawBoard(val, Turn) {
   return score + '\n' + txt;
 }
 
-let running=0;
+let running = 0;
 
 async function runMatch(a, b, turns = 100) {
-  while(running>10){
+  console.log(`queued ${a} vs ${b}`);
+  while(running > 10) {
     await sleep(10000);
   }
+  console.log(`starting ${a} vs ${b}`);
   running++;
   let val = await runCmd(`rumblebot.exe run term --raw -t=${turns} ${a}.js ${b}.js`);
   running--;
-  try{
+  try {
     return JSON.parse(val);
-  }
-  catch(e){
+  } catch (e) {
     console.log(`${a} vs ${b} errored`);
     throw val;
   }
@@ -192,7 +205,7 @@ async function bestOfX(a, b, x = 5, turns = 100, verbose = false, play = false) 
   let i = 0;
   let matches = 0;
   for(let i = 0;
-    (matches < x * 2 && i < x - 2) || (matches < x * 2 && Math.max(...score) - Math.min(...score) < 2); i++) {
+    (matches < x * MaxBestOf && i < x - 2) || (matches < x * MaxBestOf && Math.max(...score) - Math.min(...score) < MinWinBy); i++) {
     matches++;
     let val = play ? await addToQueue(a, b, turns, 'Match ' + matches) : await runMatch(a, b, turns);
     log(verbose ? drawBoard(val) : scoreText(val));
@@ -222,6 +235,30 @@ async function match(a, b, turns = 100, verbose = true) {
   return (verbose ? drawBoard(val) : scoreText(val));
 }
 
+async function superMatch(a, b, x = 5, turns) {
+  let score = [0, 0];
+  let i = 0;
+  let matches = 0;
+  for(let i = 0;
+    (matches < x * MaxBestOf && i < x - 2) || (matches < x * MaxBestOf && Math.max(...score) - Math.min(...score) < MinWinBy); i++) {
+    matches++;
+    let val = await runMatch(a, b, turns);
+    if(!val.winner) { i--; }
+    switch (val.winner) {
+      case ('Blue'):
+        score[0]++;
+        break;
+      case ('Red'):
+        score[1]++;
+        break;
+      default:
+        score[0] += 0.5;
+        score[1] += 0.5;
+    }
+  }
+  return { winner: score[0] == score[1] ? false : (score[0] > score[1] ? 'Blue' : 'Red'), score: score };
+}
+
 async function veryVerboseMatch(a, b, turns = 100, verbose = true) {
   val = await runMatch(a, b, turns);
   for(let i = 0; i < turns; i++) {
@@ -236,56 +273,111 @@ async function logRoundRobbin(matches, players) {
   }
   for(let i = 0; i < matches.length; i++) {
     matches[i].val = await matches[i].val;
-    console.log(`${blue((''+matches[i].playerA).padStart(MaxName))} vs ${red((''+matches[i].playerB).padEnd(MaxName))} : ${winnerText(matches[i].val.winner).replace(/  +/g,'')}`);
+    console.log(`${blue((''+matches[i].playerA).padStart(MaxName))} vs ${red((''+matches[i].playerB).padEnd(MaxName))} : ${winnerText(matches[i].val.winner).replace(/  +/g,'')}${matches[i].val.hasOwnProperty('score')?' '+matches[i].val.score:''}`);
     wins[matches[i].playerA][1]++;
     wins[matches[i].playerB][1]++;
     if(matches[i].val.winner === 'Blue') {
       wins[matches[i].playerA][0]++;
-    }
-    else if(matches[i].val.winner === 'Red') {
+    } else if(matches[i].val.winner === 'Red') {
       wins[matches[i].playerB][0]++;
-    }
-    else{
-      wins[matches[i].playerA][0]+=0.5;
-      wins[matches[i].playerB][0]+=0.5;
+    } else {
+      wins[matches[i].playerA][0] += 0.5;
+      wins[matches[i].playerB][0] += 0.5;
     }
   }
 
-  let winners=[];
+  let winners = [];
 
-  for(let p in wins){
-    winners.push([wins[p][0],`${(''+p).padStart(MaxName)} won ${wins[p][0]}/${wins[p][1]}`]);
+  for(let p in wins) {
+    winners.push([wins[p][0], `${(''+p).padStart(MaxName)} won ${wins[p][0]}/${wins[p][1]}`]);
   }
-  console.log('\n'+winners.sort((a,b)=>b[0]-a[0]).map(a=>a[1]).join('\n'));
+  console.log('\n' + winners.sort((a, b) => b[0] - a[0]).map(a => a[1]).join('\n'));
 }
 
-function roundRobbin(players,turns) {
+function roundRobbin(players, bestOf = 1, turns) {
   let matches = [];
   for(let a in players) {
     for(let b in players) {
-      if(a === b){continue;}
-      matches.push({ playerA: a, playerB: b, val: runMatch(players[a], players[b],turns) });
+      if(a === b) { continue; }
+      matches.push({ playerA: a, playerB: b, val: superMatch(players[a], players[b], bestOf, turns) });
     }
   }
 
-  logRoundRobbin(matches,players);
+  logRoundRobbin(matches, players);
 }
 
 var players = {
-  Enemy: 'om',
-  //h1: '11',
+  //EnemyA: 'om',
+  EnemyB: 'needle',
+  EnemyC: 'knife',
+  Flail: 'flail',
   //h2: 'h2'
 };
 
-for(let i=1;i<=4;i++){
-  for(let j=1;j<=4;j++){
-    players['H-'+i+j]=''+i+j;
+let prefix = 'HA';
+/*
+const consts = {
+  DistTo: [1, 4],
+  Prox: [1, 4],
+  FleeHealth:[1,3],
+  CloseVal:[1,3],
+  FriendlyProx:[1,4],
+  HasEnemyD:[1,4]
+};
+const DistTo = 3;// 1-4
+const Prox = 2;// 1-4
+const FleeHealth = 2;//1-3
+const CloseVal = 2;//1-3
+const FriendlyProx = 2;//1-4
+const HasEnemyD = 3; // 1-4
+
+*/
+
+const consts = {
+  DistTo: [1, 4],
+  Prox: [1, 4],
+  FleeHealth: [1, 3],
+  CloseVal: [1, 3],
+  FriendlyProx: [2, 2],
+  HasEnemyD: [3, 3]
+};
+
+let at = [];
+
+for(let v in consts) {
+  at.push([v, consts[v][0], consts[v][0], consts[v][1]]);
+}
+
+let done = false;
+while(!done) {
+  players[at.map(a => `${a[1]}`).join('')] = prefix + '-' + at.map(a => `${a[1]}`).join('-');
+
+  let on = 0;
+  while(on < at.length - 1 && at[on][1] === at[on][3]) {
+    at[on][1] = at[on][2];
+    on++;
+  }
+  if(on >= at.length - 1 && at[on][1] === at[on][3]) { done = true; continue; }
+  at[on][1]++;
+}
+
+for(let i = 3; i <= 4; i++) {
+  for(let j = 1; j <= 2; j++) {
+    players['H-' + i + j] = '' + i + j;
   }
 }
 
+for(let i = 3; i <= 4; i++) {
+  for(let j = 1; j <= 2; j++) {
+    players['H-' + i + j] = '' + i + j;
+  }
+}
+
+
 async function main() {
+  roundRobbin(players, 5, 100);
+  //console.log(await superMatch('om','flail',5))
   //veryVerboseMatch('testc','testb');
-  roundRobbin(players,100);
   //log(await bestOfX('h1', 'h1', 5, 100, false, true));
   //console.log(await match('h1', 'h1'));
 }

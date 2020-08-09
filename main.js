@@ -67,7 +67,7 @@ function runCmd(cmd) {
       if(code === 0) {
         resolve(output);
       }
-      reject(red('\n\n'+cmd+'\n\n'+output));
+      reject(red('\n\n' + cmd + '\n\n' + output));
     });
   });
 }
@@ -283,6 +283,7 @@ async function logRoundRobbin(matches, players) {
       wins[matches[i].playerA][0] += 0.5;
       wins[matches[i].playerB][0] += 0.5;
     }
+    matches[i] = null;
   }
 
   let winners = [];
@@ -298,7 +299,7 @@ function roundRobbin(players, bestOf = 1, turns) {
   for(let a in players) {
     for(let b in players) {
       if(a === b) { continue; }
-      matches.push({ playerA: a, playerB: b, val: bestOf<2?runMatch(players[a],players[b],turns):superMatch(players[a], players[b], bestOf, turns) });
+      matches.push({ playerA: a, playerB: b, val: bestOf < 2 ? runMatch(players[a], players[b], turns) : superMatch(players[a], players[b], bestOf, turns) });
     }
   }
 

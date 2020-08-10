@@ -1,5 +1,68 @@
+let players = {
+  //EnemyA: 'om',
+  EnemyB: 'needle',
+  EnemyC: 'knife',
+  Flail: 'flail',
+  ChampH: 'Champ-HA',
+  //h2: 'h2'
+};
+
+let prefix = 'HA';
+/*
+const consts = {
+  DistTo: [1, 4],
+  Prox: [1, 4],
+  FleeHealth:[1,3],
+  CloseVal:[1,3],
+  FriendlyProx:[1,4],
+  HasEnemyD:[1,4]
+};
+const DistTo = 3;// 1-4
+const Prox = 2;// 1-4
+const FleeHealth = 2;//1-3
+const CloseVal = 2;//1-3
+const FriendlyProx = 2;//1-4
+const HasEnemyD = 3; // 1-4
+
+*/
+
+const consts = {
+  DistTo: [4, 4],
+  Prox: [4, 4],
+  FleeHealth: [2, 2],
+  CloseVal: [1, 3],
+  FriendlyProx: [1, 4],
+  HasEnemyD: [2, 3]
+};
+
+let at = [];
+
+for(let v in consts) {
+  at.push([v, consts[v][0], consts[v][0], consts[v][1]]);
+}
+
+let done = false;
+while(!done) {
+  players[at.map(a => `${a[1]}`).join('')] = prefix + '-' + at.map(a => `${a[1]}`).join('-');
+
+  let on = 0;
+  while(on < at.length - 1 && at[on][1] === at[on][3]) {
+    at[on][1] = at[on][2];
+    on++;
+  }
+  if(on >= at.length - 1 && at[on][1] === at[on][3]) { done = true; continue; }
+  at[on][1]++;
+}
+
+for(let i = 3; i <= 4; i++) {
+  for(let j = 1; j <= 2; j++) {
+    players['H-' + i + j] = '' + i + j;
+  }
+}
+
+
 const PreviewAfter = 3;
-const MaxName = 6;
+const MaxName = 7;
 
 const MaxBestOf = 3;
 const MinWinBy = 3;
@@ -175,7 +238,7 @@ let running = 0;
 async function runMatch(a, b, turns = 100) {
   //console.log(`queued ${a} vs ${b}`);
   while(running > 10) {
-    await sleep(10000);
+    await sleep(1000);
   }
   //console.log(`starting ${a} vs ${b}`);
   running++;
@@ -268,13 +331,23 @@ async function veryVerboseMatch(a, b, turns = 100, verbose = true) {
 async function logRoundRobbin(matches, players) {
   let wins = {};
   for(let p in players) {
-    wins[p] = [0, 0];
+    wins[p] = [0, 0, {}];
+
+    for(let a in players) {
+      wins[p].a = 0;
+    }
   }
   for(let i = 0; i < matches.length; i++) {
     matches[i].val = await matches[i].val;
-    console.log(`${blue((''+matches[i].playerA).padStart(MaxName))} vs ${red((''+matches[i].playerB).padEnd(MaxName))} : ${winnerText(matches[i].val.winner).replace(/  +/g,'')}${matches[i].val.hasOwnProperty('score')?' '+matches[i].val.score:''}`);
+    console.log(`${blue((''+matches[i].playerA).padStart(MaxName))} vs ${red((''+matches[i].playerB).padEnd(MaxName))} : ${winnerText(matches[i].val.winner).replace(/  +/g,'')}${matches[i].val.hasOwnProperty('score')?' ' + `${blue(matches[i].val.score[0])}:${red(matches[i].val.score[1])}`:''}`);
     wins[matches[i].playerA][1]++;
     wins[matches[i].playerB][1]++;
+
+    wins[matches[i].playerA][2][matches[i].playerB] = [
+      matches[i].val.hasOwnProperty('score') ? matches[i].val.score : '',
+      matches[i].val.winner === 'Blue' ? 1 : matches[i].val.winner === 'Red' ? 2 : 3
+    ];
+
     if(matches[i].val.winner === 'Blue') {
       wins[matches[i].playerA][0]++;
     } else if(matches[i].val.winner === 'Red') {
@@ -289,9 +362,41 @@ async function logRoundRobbin(matches, players) {
   let winners = [];
 
   for(let p in wins) {
-    winners.push([wins[p][0], `${(''+p).padStart(MaxName)} won ${wins[p][0]}/${wins[p][1]}`]);
+    winners.push([wins[p][0], `${(''+p).padStart(MaxName)} won ${wins[p][0]}/${wins[p][1]}`, p.padEnd(MaxName)]);
   }
   console.log('\n' + winners.sort((a, b) => b[0] - a[0]).map(a => a[1]).join('\n'));
+
+  winners = winners.sort((a, b) => a[0] - b[0]);
+
+  // table characters: │ ┼ ─
+
+  console.log('\n' +
+    '│'.padStart(MaxName + 1) + winners.map(a => red(a[2])).join('│') +
+    '\n' + ''.padStart(MaxName, '─') + '┼' +
+    winners.map(a => ''.padStart(MaxName, '─')).join('┼') + '\n' +
+    winners.map(a => {
+      return blue(a[2]) + '│' + winners.map(b => {
+        if(a[2] === b[2]) { return ''.padEnd(MaxName); }
+        let mat = wins[a[2].replace(/ /g, '')][2][b[2].replace(/ /g, '')];
+        let score = mat[0] ? limit1(mat[0][0] / mat[0][1]) : -1;
+        switch (mat[1]) {
+          case (0):
+          case (3):
+            return ' Draw'.padEnd(MaxName);
+          case (1):
+            if(score < 0) { return blue(' Blue'.padEnd(MaxName)); }
+            return ' ' + blue(('' + score).padEnd(MaxName).slice(0, MaxName - 2)) + ' ';
+          case (2):
+            if(score < 0) { return red(' Red'.padEnd(MaxName)); }
+            return ' ' + red(('' + (1 - score)).padEnd(MaxName).slice(0, MaxName - 2)) + ' ';
+          default:
+            return ''.padEnd(MaxName);
+        }
+
+        return txt+` ${blue(mat[0][0]>>0)}:${red(mat[0][1]>>0)}`.padEnd(MaxName-1+(blue('')+red('')).length);
+      }).join('│')
+    }).join('\n')
+  );
 }
 
 function roundRobbin(players, bestOf = 1, turns) {
@@ -306,70 +411,8 @@ function roundRobbin(players, bestOf = 1, turns) {
   logRoundRobbin(matches, players);
 }
 
-var players = {
-  //EnemyA: 'om',
-  EnemyB: 'needle',
-  EnemyC: 'knife',
-  Flail: 'flail',
-  //h2: 'h2'
-};
-
-let prefix = 'HA';
-/*
-const consts = {
-  DistTo: [1, 4],
-  Prox: [1, 4],
-  FleeHealth:[1,3],
-  CloseVal:[1,3],
-  FriendlyProx:[1,4],
-  HasEnemyD:[1,4]
-};
-const DistTo = 3;// 1-4
-const Prox = 2;// 1-4
-const FleeHealth = 2;//1-3
-const CloseVal = 2;//1-3
-const FriendlyProx = 2;//1-4
-const HasEnemyD = 3; // 1-4
-
-*/
-
-const consts = {
-  DistTo: [1, 4],
-  Prox: [1, 4],
-  FleeHealth: [1, 3],
-  CloseVal: [2, 2],
-  FriendlyProx: [2, 2],
-  HasEnemyD: [3, 3]
-};
-
-let at = [];
-
-for(let v in consts) {
-  at.push([v, consts[v][0], consts[v][0], consts[v][1]]);
-}
-
-let done = false;
-while(!done) {
-  players[at.map(a => `${a[1]}`).join('')] = prefix + '-' + at.map(a => `${a[1]}`).join('-');
-
-  let on = 0;
-  while(on < at.length - 1 && at[on][1] === at[on][3]) {
-    at[on][1] = at[on][2];
-    on++;
-  }
-  if(on >= at.length - 1 && at[on][1] === at[on][3]) { done = true; continue; }
-  at[on][1]++;
-}
-
-for(let i = 3; i <= 4; i++) {
-  for(let j = 1; j <= 2; j++) {
-    players['H-' + i + j] = '' + i + j;
-  }
-}
-
-
 async function main() {
-  roundRobbin(players, 1, 100);
+  roundRobbin(players, 3, 30);
   //roundRobbin(players, 5, 100);
 
   //console.log(await superMatch('om','flail',5))
